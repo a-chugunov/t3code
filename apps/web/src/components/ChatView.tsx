@@ -200,6 +200,11 @@ import { addBrowserSurface } from "./preview/addBrowserSurface";
 import { closePreviewSession } from "./preview/closePreviewSession";
 import { ThreadPreviewMiniPlayer } from "./preview/ThreadPreviewMiniPlayer";
 import { subscribePreviewAction } from "./preview/previewActionBus";
+import {
+  subscribePadActions,
+  type PadAction,
+  type PadActionOutcome,
+} from "../codexMicro/padActionBus";
 import { getConfiguredPreviewUrls } from "./preview/previewEmptyStateLogic";
 import { makeWorkspaceFileDropHandlers } from "./chat/workspaceFileDrop";
 import {
@@ -8642,6 +8647,43 @@ export default function ChatView(props: ChatViewProps) {
     },
     [activeThreadId, environmentId, respondToThreadApproval, setThreadError],
   );
+
+  // Codex Micro keys act on the open thread exactly as the matching controls do.
+  const padActionHandlerRef = useRef<(action: PadAction) => PadActionOutcome | null>(() => null);
+  padActionHandlerRef.current = (action) => {
+    switch (action) {
+      case "approve":
+      case "decline": {
+        const decision = action === "approve" ? "accept" : "decline";
+        const approval = activePendingApproval;
+        if (
+          approval === null ||
+          respondingRequestIds.includes(approval.requestId) ||
+          (approval.options !== undefined &&
+            !approval.options.some((option) => option.decision === decision))
+        ) {
+          return "unavailable";
+        }
+        void onRespondToApproval(approval.requestId, decision);
+        return "done";
+      }
+      case "send":
+        void onSend();
+        return "done";
+      case "stop":
+        if (!canInterruptRunningThread) return "unavailable";
+        void onInterrupt();
+        return "done";
+      case "fast-mode": {
+        const enabled = composerRef.current?.toggleFastMode() ?? null;
+        if (enabled === null) return "unavailable";
+        return enabled ? "fast-mode-on" : "fast-mode-off";
+      }
+      case "new-thread":
+        return null;
+    }
+  };
+  useEffect(() => subscribePadActions((action) => padActionHandlerRef.current(action)), []);
 
   const onRespondToUserInput = useCallback(
     async (requestId: ApprovalRequestId, answers: Record<string, unknown>) => {

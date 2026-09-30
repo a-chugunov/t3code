@@ -17,6 +17,7 @@ export type SettingsPath =
   | "/settings/appearance"
   | "/settings/keybindings"
   | "/settings/snap-shot"
+  | "/settings/codex-micro"
   | "/settings/providers"
   | "/settings/integrations"
   | "/settings/source-control"
@@ -88,6 +89,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/appearance": "Appearance",
   "/settings/keybindings": "Keybindings",
   "/settings/snap-shot": "SnapShots",
+  "/settings/codex-micro": "Codex Micro",
   "/settings/providers": "Providers",
   "/settings/integrations": "Integrations",
   "/settings/source-control": "Source Control",
@@ -505,6 +507,35 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/snap-shot",
   },
   {
+    id: "codex-micro-enabled",
+    title: "Codex Micro",
+    to: "/settings/codex-micro",
+    searchTerms: [
+      "macropad keypad hardware usb bluetooth agent keys lights leds openai work louder",
+    ],
+  },
+  {
+    id: "codex-micro-keys",
+    title: "Keys",
+    to: "/settings/codex-micro",
+    targetId: "codex-micro-enabled",
+    searchTerms: ["approve decline send stop fast mode new thread dial knob joystick stick"],
+  },
+  {
+    id: "codex-micro-brightness",
+    title: "Brightness",
+    to: "/settings/codex-micro",
+    targetId: "codex-micro-enabled",
+    searchTerms: ["lights leds glow"],
+  },
+  {
+    id: "codex-micro-auto-dim",
+    title: "Auto-dim",
+    to: "/settings/codex-micro",
+    targetId: "codex-micro-enabled",
+    searchTerms: ["lights off idle timeout sleep"],
+  },
+  {
     id: "snap-shot-accessibility",
     title: "Include app text",
     to: "/settings/snap-shot",
@@ -844,6 +875,7 @@ const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScop
   "/settings/general": null,
   "/settings/appearance": null,
   "/settings/snap-shot": null,
+  "/settings/codex-micro": null,
   // Keybindings fan out to the selection; Providers shows the representative
   // environment at any selection. Neither needs a particular scope to render.
   "/settings/keybindings": null,

@@ -274,6 +274,7 @@ import {
   getComposerProviderState,
   renderProviderTraitsMenuContent,
   renderProviderTraitsPicker,
+  toggleComposerFastMode,
 } from "./composerProviderState";
 import { ContextWindowMeter, ContextWindowMeterPlaceholder } from "./ContextWindowMeter";
 import {
@@ -1273,6 +1274,8 @@ export interface ChatComposerHandle {
   openModelPicker: () => void;
   toggleModelPicker: () => void;
   openControl: (command: KeybindingCommand) => void;
+  /** Flip the model's fast mode. Returns whether it is now on, or null without one. */
+  toggleFastMode: () => boolean | null;
   isModelPickerOpen: () => boolean;
   compactContext: () => void;
   readSnapshot: () => {
@@ -1775,6 +1778,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     (store) => store.syncPersistedAttachments,
   );
   const getComposerDraft = useComposerDraftStore((store) => store.getComposerDraft);
+  const setProviderModelOptions = useComposerDraftStore((store) => store.setProviderModelOptions);
 
   useEffect(() => {
     if (!attachmentUploadsCapabilityKnown) {
@@ -5955,6 +5959,22 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         trigger.click();
       },
       compactContext: compactThreadContext,
+      toggleFastMode: () => {
+        const next = toggleComposerFastMode({
+          provider: selectedProvider,
+          model: selectedModel,
+          models: selectedProviderModels,
+          modelOptions: composerModelOptions?.[selectedInstanceId],
+          planModeEnabled: settings.planModeEnabled,
+        });
+        if (next === null) return null;
+        setProviderModelOptions(composerDraftTarget, selectedProvider, next.selections, {
+          instanceId: selectedInstanceId,
+          model: selectedModel,
+          persistSticky: true,
+        });
+        return next.enabled;
+      },
       isModelPickerOpen: () => isComposerModelPickerOpen,
       readSnapshot: () => {
         return readComposerSnapshot();
@@ -6090,6 +6110,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       selectedPromptEffort,
       selectedProvider,
       selectedProviderModels,
+      selectedInstanceId,
+      composerModelOptions,
+      setProviderModelOptions,
+      settings.planModeEnabled,
       interactionMode,
       planModeUiEnabled,
       compactThreadContext,

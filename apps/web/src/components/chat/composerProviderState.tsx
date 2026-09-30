@@ -8,6 +8,7 @@ import {
 } from "@t3tools/contracts";
 import {
   buildExplicitProviderOptionSelectionsFromDescriptors,
+  buildProviderOptionSelectionsFromDescriptors,
   getProviderOptionCurrentValue,
   getProviderOptionDescriptors,
   isClaudeUltrathinkPrompt,
@@ -156,6 +157,63 @@ export function getComposerProviderState(input: ComposerProviderStateInput): Com
         }
       : {}),
   };
+}
+
+/**
+ * Flips fast mode on the composer's model: the `fastMode` switch, or Codex's
+ * Fast service tier against Standard. Null when the model offers neither.
+ */
+export function toggleComposerFastMode(input: {
+  provider: ProviderDriverKind;
+  model: string;
+  models: ReadonlyArray<ServerProviderModel>;
+  modelOptions: ReadonlyArray<ProviderOptionSelection> | null | undefined;
+  planModeEnabled: boolean;
+}): {
+  readonly enabled: boolean;
+  readonly selections: ReadonlyArray<ProviderOptionSelection> | undefined;
+} | null {
+  const { caps, selections } = resolveComposerOptionSelections(
+    input.models,
+    input.model,
+    input.provider,
+    input.modelOptions,
+    input.planModeEnabled,
+  );
+  const descriptors = getProviderOptionDescriptors({ caps, selections });
+  for (const descriptor of descriptors) {
+    if (descriptor.type === "boolean" && descriptor.id === "fastMode") {
+      const enabled = descriptor.currentValue !== true;
+      return {
+        enabled,
+        selections: buildProviderOptionSelectionsFromDescriptors(
+          descriptors.map((entry) =>
+            entry === descriptor ? { ...descriptor, currentValue: enabled } : entry,
+          ),
+        ),
+      };
+    }
+    if (
+      input.provider === "codex" &&
+      descriptor.type === "select" &&
+      descriptor.id === "serviceTier"
+    ) {
+      const fastTier = descriptor.options.find(({ label }) => label === "Fast");
+      if (!fastTier) continue;
+      const enabled = getProviderOptionCurrentValue(descriptor) !== fastTier.id;
+      return {
+        enabled,
+        selections: buildProviderOptionSelectionsFromDescriptors(
+          descriptors.map((entry) =>
+            entry === descriptor
+              ? { ...descriptor, currentValue: enabled ? fastTier.id : "default" }
+              : entry,
+          ),
+        ),
+      };
+    }
+  }
+  return null;
 }
 
 function renderTraitsControl(

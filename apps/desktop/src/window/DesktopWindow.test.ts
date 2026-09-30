@@ -91,6 +91,7 @@ function makeFakeBrowserWindow() {
     reload: vi.fn(),
     replaceMisspelling: vi.fn(),
     send: vi.fn(),
+    session: { on: vi.fn(), setDevicePermissionHandler: vi.fn() },
     setBackgroundThrottling: vi.fn(),
     setWindowOpenHandler: vi.fn(),
   };

@@ -12,6 +12,7 @@ import {
   getComposerProviderState,
   renderProviderTraitsMenuContent,
   renderProviderTraitsPicker,
+  toggleComposerFastMode,
   withImplicitFastModeDefault,
 } from "./composerProviderState";
 
@@ -488,5 +489,76 @@ describe("provider traits render guards", () => {
 
     expect(renderProviderTraitsPicker(args)).toBeNull();
     expect(renderProviderTraitsMenuContent(args)).toBeNull();
+  });
+});
+
+describe("toggleComposerFastMode", () => {
+  it("flips the fastMode switch and keeps the other traits", () => {
+    const models = modelWith([
+      selectDescriptor("effort", [{ id: "high", label: "High", isDefault: true }]),
+      booleanDescriptor("fastMode"),
+    ]);
+    const on = toggleComposerFastMode({
+      provider: PROVIDER,
+      model: MODEL,
+      models,
+      modelOptions: undefined,
+      planModeEnabled: true,
+    });
+    expect(on).toEqual({
+      enabled: true,
+      selections: selections(["effort", "high"], ["fastMode", true]),
+    });
+
+    const off = toggleComposerFastMode({
+      provider: PROVIDER,
+      model: MODEL,
+      models,
+      modelOptions: on?.selections,
+      planModeEnabled: true,
+    });
+    expect(off?.enabled).toBe(false);
+    expect(off?.selections).toContainEqual({ id: "fastMode", value: false });
+  });
+
+  it("moves Codex between the Standard and Fast service tiers", () => {
+    const models = modelWith([
+      selectDescriptor("serviceTier", [
+        { id: "default", label: "Standard", isDefault: true },
+        { id: "priority", label: "Fast" },
+      ]),
+    ]);
+    const on = toggleComposerFastMode({
+      provider: PROVIDER,
+      model: MODEL,
+      models,
+      modelOptions: undefined,
+      planModeEnabled: true,
+    });
+    expect(on).toEqual({ enabled: true, selections: selections(["serviceTier", "priority"]) });
+    expect(
+      toggleComposerFastMode({
+        provider: PROVIDER,
+        model: MODEL,
+        models,
+        modelOptions: on?.selections,
+        planModeEnabled: true,
+      }),
+    ).toEqual({ enabled: false, selections: selections(["serviceTier", "default"]) });
+  });
+
+  it("reports models without a fast mode", () => {
+    const models = modelWith([
+      selectDescriptor("effort", [{ id: "high", label: "High", isDefault: true }]),
+    ]);
+    expect(
+      toggleComposerFastMode({
+        provider: PROVIDER,
+        model: MODEL,
+        models,
+        modelOptions: undefined,
+        planModeEnabled: true,
+      }),
+    ).toBeNull();
   });
 });
