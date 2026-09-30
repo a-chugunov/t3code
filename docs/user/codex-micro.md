@@ -24,6 +24,10 @@ The Agent Keys hold your first six pinned and active threads, from every connect
 thread keeps its key for as long as it stays among those six, so keys don't shuffle as threads
 change order. Snoozed, settled, and archived threads leave the pad.
 
+To change what they hold, use **Agent Keys** under **Controls**: **Pinned threads** keeps only your
+pins, and **Threads you choose** lets you pick each key's thread from the pad picture. Giving a key
+a thread that already has one swaps the two.
+
 | Color | Meaning                                                 |
 | ----- | ------------------------------------------------------- |
 | White | Idle                                                    |
@@ -42,13 +46,19 @@ mode, Approve, Decline, New thread (the SPLIT key), and Send (the CODEX key). Th
 is unassigned because T3 Code has no voice input on desktop yet.
 
 Keycaps come off, so each key's job is set by position. Select a key on the pad picture in
-settings to change it. While the settings page is open, pressing a key on the pad only lights it
-up on screen, so you can find a key without setting anything off.
+settings to give it another action, such as moving between threads or opening the command palette.
+**Insert text…** makes the key type a snippet into the composer without sending it. While the
+settings page is open, pressing a key on the pad only lights it up on screen, so you can find a key
+without setting anything off.
 
-- **Dial:** turn to move between threads, press to open the thread that needs you most, and hold
-  to open the Codex Micro settings.
+The wide MIC slot has two switches. If you fit two single keycaps there, turn on **Split the wide
+key** to give each its own action.
+
+- **Dial:** turn to move between threads, and press to open the thread that needs you most. Set
+  **Dial** to **Scroll the conversation** to scroll the open thread instead; pressing then jumps to
+  the latest message. Holding the dial always opens the Codex Micro settings.
 - **Stick:** up opens the command palette, down toggles the sidebar, and left and right go back
-  and forward.
+  and forward. Each direction can take any action under **Stick**.
 
 ## Lighting
 

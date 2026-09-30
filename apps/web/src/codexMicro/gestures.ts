@@ -74,7 +74,8 @@ export class PadGestureReader {
       this.lastAgentTap = doubleTap ? null : { index, at: now };
       return { kind: "agent-key", index, doubleTap };
     }
-    // ACT11 is the second switch under the wide keycap; ACT10 already reports the press.
+    // ACT11 is the second switch under the wide slot. Under one wide keycap it
+    // fires alongside ACT10, so whether it counts is the caller's setting.
     return isActionKey(event.key) ? { kind: "action-key", key: event.key } : null;
   }
 }

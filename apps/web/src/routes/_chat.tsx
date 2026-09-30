@@ -86,7 +86,7 @@ function ChatRouteGlobalShortcuts() {
   useEffect(
     () =>
       subscribePadActions((action) => {
-        if (action !== "new-thread") return null;
+        if (action.type !== "new-thread") return null;
         startNewChat();
         return "done";
       }),

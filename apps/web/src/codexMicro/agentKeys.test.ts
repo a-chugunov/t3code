@@ -14,6 +14,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   agentKeyThreadKey,
   assignAgentKeys,
+  placeAgentKeyThread,
   rankAgentKeyThreads,
   resolveAgentKeyState,
 } from "./agentKeys";
@@ -159,6 +160,20 @@ describe("rankAgentKeyThreads", () => {
     expect(ranked.map((entry) => entry.id)).toEqual(["pinned", "active-new", "active-old"]);
   });
 
+  it("keeps only pinned threads, in pin order, for the pinned mode", () => {
+    const ranked = rankAgentKeyThreads(
+      [
+        thread("active", { createdAt: "2026-09-30T11:00:00.000Z" }),
+        thread("pinned-b", { pinnedAt: NOW, pinOrderKey: "b" }),
+        thread("pinned-a", { pinnedAt: NOW, pinOrderKey: "a" }),
+        thread("pinned-settled", { pinnedAt: NOW, settledOverride: "settled", settledAt: NOW }),
+      ],
+      NOW,
+      "pinned",
+    );
+    expect(ranked.map((entry) => entry.id)).toEqual(["pinned-a", "pinned-b"]);
+  });
+
   it("brings a thread back once its snooze has passed", () => {
     const woke = thread("woke", { snoozedAt: NOW, snoozedUntil: "2026-09-30T11:00:00.000Z" });
     expect(rankAgentKeyThreads([woke], NOW).map(agentKeyThreadKey)).toEqual([
@@ -201,5 +216,19 @@ describe("resolveAgentKeyState", () => {
   it("shows an unseen failed turn as red", () => {
     const failed = thread("t", { latestTurn: completedTurn("error") });
     expect(resolveAgentKeyState(failed, "2026-09-30T11:10:00.000Z")).toBe("error");
+  });
+});
+
+describe("placeAgentKeyThread", () => {
+  it("puts a thread on an empty key", () => {
+    expect(placeAgentKeyThread(["a", null], 1, "b")).toEqual(["a", "b", null, null, null, null]);
+  });
+
+  it("swaps when the thread already has another key", () => {
+    expect(placeAgentKeyThread(["a", "b", "c"], 2, "a")).toEqual(["c", "b", "a", null, null, null]);
+  });
+
+  it("clears a key", () => {
+    expect(placeAgentKeyThread(["a", "b"], 0, null)).toEqual([null, "b", null, null, null, null]);
   });
 });

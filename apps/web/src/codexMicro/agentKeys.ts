@@ -43,12 +43,14 @@ export function resolveAgentKeyState(
 }
 
 /**
- * Threads that can hold a key, in sidebar order: pinned, then active.
- * Snoozed, settled, and archived threads are put away, so they stay dark.
+ * Threads that can hold a key, in sidebar order: pinned, then active, or
+ * pinned alone. Snoozed, settled, and archived threads are put away, so they
+ * stay dark.
  */
 export function rankAgentKeyThreads(
   threads: ReadonlyArray<EnvironmentThreadShell>,
   now: string,
+  scope: "inbox" | "pinned" = "inbox",
 ): EnvironmentThreadShell[] {
   const pinned: EnvironmentThreadShell[] = [];
   const active: EnvironmentThreadShell[] = [];
@@ -57,7 +59,10 @@ export function rankAgentKeyThreads(
     if (effectiveSnoozed(thread, { now })) continue;
     (thread.pinnedAt != null ? pinned : active).push(thread);
   }
-  return [...sortPinnedThreadsByOrderKey(pinned), ...sortActiveThreadsByOrderKey(active)];
+  const sortedPinned = sortPinnedThreadsByOrderKey(pinned);
+  return scope === "pinned"
+    ? sortedPinned
+    : [...sortedPinned, ...sortActiveThreadsByOrderKey(active)];
 }
 
 export function agentKeyThreadKey(thread: EnvironmentThreadShell): string {
@@ -95,4 +100,21 @@ export function assignAgentKeys(
     keys[index] = threadKey;
   }
   return keys;
+}
+
+/**
+ * Puts a chosen thread on a key. A thread already on another key swaps places
+ * with the key's old thread, so one thread never shows on two keys.
+ */
+export function placeAgentKeyThread(
+  keys: ReadonlyArray<string | null>,
+  index: number,
+  threadKey: string | null,
+): Array<string | null> {
+  const next = Array.from({ length: AGENT_KEY_COUNT }, (_, slot) => keys[slot] ?? null);
+  const previous = next[index] ?? null;
+  const elsewhere = threadKey === null ? -1 : next.indexOf(threadKey);
+  if (elsewhere !== -1 && elsewhere !== index) next[elsewhere] = previous;
+  next[index] = threadKey;
+  return next;
 }

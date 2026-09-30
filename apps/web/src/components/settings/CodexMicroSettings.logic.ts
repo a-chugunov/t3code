@@ -1,4 +1,10 @@
-import type { CodexMicroAutoDimSeconds, CodexMicroKeyAction } from "@t3tools/contracts";
+import type {
+  CodexMicroAgentKeyMode,
+  CodexMicroAutoDimSeconds,
+  CodexMicroDialMode,
+  CodexMicroKeyAction,
+  CodexMicroStickDirection,
+} from "@t3tools/contracts";
 
 import type { AgentKeyState } from "../../codexMicro/agentKeys";
 import type { CodexMicroPadState } from "../../codexMicro/codexMicroStore";
@@ -9,9 +15,54 @@ export const CODEX_MICRO_KEY_ACTION_LABELS: Record<CodexMicroKeyAction, string> 
   send: "Send",
   stop: "Stop",
   "fast-mode": "Fast mode",
+  "insert-text": "Insert text",
   "new-thread": "New thread",
+  "previous-thread": "Previous thread",
+  "next-thread": "Next thread",
+  "open-attention": "Open what needs you",
+  "command-palette": "Command palette",
+  "toggle-sidebar": "Toggle sidebar",
+  back: "Back",
+  forward: "Forward",
   none: "Unassigned",
 };
+
+/** The action menu's sections, in order. `insert-text` only makes sense on a key. */
+export const CODEX_MICRO_ACTION_GROUPS: ReadonlyArray<{
+  readonly label: string;
+  readonly actions: ReadonlyArray<CodexMicroKeyAction>;
+}> = [
+  {
+    label: "Open thread",
+    actions: ["approve", "decline", "send", "stop", "fast-mode", "insert-text"],
+  },
+  { label: "Threads", actions: ["new-thread", "previous-thread", "next-thread", "open-attention"] },
+  { label: "App", actions: ["command-palette", "toggle-sidebar", "back", "forward"] },
+];
+
+export const CODEX_MICRO_AGENT_KEY_MODE_LABELS: Record<CodexMicroAgentKeyMode, string> = {
+  inbox: "Pinned and active threads",
+  pinned: "Pinned threads",
+  custom: "Threads you choose",
+};
+
+export const CODEX_MICRO_DIAL_MODE_LABELS: Record<CodexMicroDialMode, string> = {
+  threads: "Move between threads",
+  scroll: "Scroll the conversation",
+};
+
+export const CODEX_MICRO_STICK_DIRECTION_LABELS: Record<CodexMicroStickDirection, string> = {
+  up: "Up",
+  down: "Down",
+  left: "Left",
+  right: "Right",
+};
+
+/** What a key's picture says: its action, or the text it types. */
+export function codexMicroKeyLabel(action: CodexMicroKeyAction, text: string | undefined): string {
+  if (action === "insert-text" && text) return `“${text}”`;
+  return CODEX_MICRO_KEY_ACTION_LABELS[action];
+}
 
 export const CODEX_MICRO_AUTO_DIM_LABELS: Record<CodexMicroAutoDimSeconds, string> = {
   0: "Never",

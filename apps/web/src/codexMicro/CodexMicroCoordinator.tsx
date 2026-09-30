@@ -15,6 +15,7 @@ import { useThreadShells } from "../state/entities";
 import { resolveThreadRouteRef } from "../threadRoutes";
 import { useUiStateStore } from "../uiStateStore";
 import {
+  AGENT_KEY_COUNT,
   agentKeyThreadKey,
   assignAgentKeys,
   rankAgentKeyThreads,
@@ -46,13 +47,16 @@ const STATUS_RETRY_DELAYS_MS = [500, 2_000];
 const JOYSTICK_ACTIVITY_DISTANCE = 0.1;
 const CODEX_MICRO_SETTINGS_PATH = "/settings/codex-micro";
 
-const UNAVAILABLE_MESSAGES: Record<PadAction, string> = {
+const UNAVAILABLE_MESSAGES: Record<PadAction["type"], string> = {
   approve: "No approval is waiting in the open thread.",
   decline: "No approval is waiting in the open thread.",
   send: "Open a thread to send its draft.",
   stop: "Nothing is running in the open thread.",
   "fast-mode": "The open thread's model has no fast mode.",
   "new-thread": "Return to your threads to start a new one.",
+  "insert-text": "Open a thread to type into its composer.",
+  scroll: "Open a thread to scroll it.",
+  "scroll-latest": "Open a thread to scroll it.",
 };
 
 const ATTENTION_ORDER: ReadonlyArray<AgentKeyState> = ["attention", "error", "unread"];
@@ -294,8 +298,8 @@ function trackPressedControls(event: PadInputEvent): void {
   }
 }
 
-function runPadAction(action: CodexMicroKeyAction): void {
-  if (action === "none") return;
+/** Hands an action to the view that owns it, and says so when nothing could act. */
+function runBusAction(action: PadAction): void {
   const outcome = dispatchPadAction(action);
   if (outcome === "done") return;
   if (outcome === "fast-mode-on" || outcome === "fast-mode-off") {
@@ -305,7 +309,9 @@ function runPadAction(action: CodexMicroKeyAction): void {
     });
     return;
   }
-  toastManager.add({ type: "info", title: UNAVAILABLE_MESSAGES[action] });
+  // A dial turn with nothing to scroll is not worth a toast per detent.
+  if (action.type === "scroll") return;
+  toastManager.add({ type: "info", title: UNAVAILABLE_MESSAGES[action.type] });
 }
 
 function CodexMicroDriver({ hid }: { readonly hid: Hid }) {
@@ -314,6 +320,12 @@ function CodexMicroDriver({ hid }: { readonly hid: Hid }) {
   const brightness = useClientSettings((settings) => settings.codexMicroBrightness);
   const autoDimSeconds = useClientSettings((settings) => settings.codexMicroAutoDimSeconds);
   const keyActions = useClientSettings((settings) => settings.codexMicroKeyActions);
+  const keyTexts = useClientSettings((settings) => settings.codexMicroKeyTexts);
+  const splitWideKey = useClientSettings((settings) => settings.codexMicroSplitWideKey);
+  const dialMode = useClientSettings((settings) => settings.codexMicroDialMode);
+  const stickActions = useClientSettings((settings) => settings.codexMicroStickActions);
+  const agentKeyMode = useClientSettings((settings) => settings.codexMicroAgentKeyMode);
+  const customAgentKeys = useClientSettings((settings) => settings.codexMicroAgentKeyThreads);
   const threads = useThreadShells();
   const lastVisitedById = useUiStateStore((state) => state.threadLastVisitedAtById);
   const nowMinute = useNowMinute();
@@ -330,27 +342,46 @@ function CodexMicroDriver({ hid }: { readonly hid: Hid }) {
     },
   });
 
-  // Snoozes wake on the clock, so ranking re-runs each minute as well.
+  // Snoozes wake on the clock, so ranking re-runs each minute as well. The
+  // dial and the thread-stepping actions always walk the whole inbox.
   const ranked = useMemo(
     () => rankAgentKeyThreads(threads, `${nowMinute}:00.000Z`),
     [threads, nowMinute],
+  );
+  const keyCandidates = useMemo(
+    () =>
+      agentKeyMode === "pinned"
+        ? rankAgentKeyThreads(threads, `${nowMinute}:00.000Z`, "pinned")
+        : ranked,
+    [agentKeyMode, nowMinute, ranked, threads],
   );
   const threadByKey = useMemo(
     () => new Map(threads.map((thread) => [agentKeyThreadKey(thread), thread] as const)),
     [threads],
   );
 
-  const [agentKeys, setAgentKeys] = useState(readStoredAgentKeys);
+  const [followedAgentKeys, setFollowedAgentKeys] = useState(readStoredAgentKeys);
   useEffect(() => {
-    const rankedKeys = ranked.map(agentKeyThreadKey);
+    if (agentKeyMode === "custom") return;
+    const candidateKeys = keyCandidates.map(agentKeyThreadKey);
     const known = new Set(threadByKey.keys());
-    setAgentKeys((previous) => {
-      const next = assignAgentKeys(previous, rankedKeys, known);
+    setFollowedAgentKeys((previous) => {
+      const next = assignAgentKeys(previous, candidateKeys, known);
       return sameAgentKeys(previous, next) ? previous : next;
     });
-  }, [ranked, threadByKey]);
+  }, [agentKeyMode, keyCandidates, threadByKey]);
   useEffect(() => {
-    setLocalStorageItem(AGENT_KEYS_STORAGE_KEY, agentKeys, StoredAgentKeys);
+    setLocalStorageItem(AGENT_KEYS_STORAGE_KEY, followedAgentKeys, StoredAgentKeys);
+  }, [followedAgentKeys]);
+  // Chosen keys stay put: a thread you placed keeps its key even when settled.
+  const agentKeys = useMemo(
+    () =>
+      agentKeyMode === "custom"
+        ? Array.from({ length: AGENT_KEY_COUNT }, (_, index) => customAgentKeys[index] ?? null)
+        : followedAgentKeys,
+    [agentKeyMode, customAgentKeys, followedAgentKeys],
+  );
+  useEffect(() => {
     useCodexMicroStore.setState({ agentKeys });
   }, [agentKeys]);
 
@@ -413,6 +444,10 @@ function CodexMicroDriver({ hid }: { readonly hid: Hid }) {
     openThreadKey,
     identifyingKeys,
     keyActions,
+    keyTexts,
+    splitWideKey,
+    dialMode,
+    stickActions,
     threadByKey,
     stateOf,
   });
@@ -422,6 +457,10 @@ function CodexMicroDriver({ hid }: { readonly hid: Hid }) {
     openThreadKey,
     identifyingKeys,
     keyActions,
+    keyTexts,
+    splitWideKey,
+    dialMode,
+    stickActions,
     threadByKey,
     stateOf,
   };
@@ -433,6 +472,78 @@ function CodexMicroDriver({ hid }: { readonly hid: Hid }) {
         params: { environmentId: thread.environmentId, threadId: thread.id },
       }),
     [navigate],
+  );
+
+  const stepThread = useCallback(
+    (step: 1 | -1) => {
+      const { ranked: inbox, openThreadKey: open } = latest.current;
+      if (inbox.length === 0) return;
+      const index = inbox.findIndex((thread) => agentKeyThreadKey(thread) === open);
+      const next =
+        index === -1
+          ? step > 0
+            ? 0
+            : inbox.length - 1
+          : (index + step + inbox.length) % inbox.length;
+      const thread = inbox[next];
+      if (thread !== undefined) openThread(thread);
+    },
+    [openThread],
+  );
+
+  const openAttention = useCallback(() => {
+    const { ranked: inbox, stateOf: stateOfKey } = latest.current;
+    for (const wanted of ATTENTION_ORDER) {
+      const thread = inbox.find((candidate) => stateOfKey(agentKeyThreadKey(candidate)) === wanted);
+      if (thread !== undefined) {
+        openThread(thread);
+        return;
+      }
+    }
+    toastManager.add({ type: "info", title: "Nothing needs you right now." });
+  }, [openThread]);
+
+  const runKeyAction = useCallback(
+    (action: CodexMicroKeyAction, text: string | undefined) => {
+      switch (action) {
+        case "none":
+          return;
+        case "command-palette":
+          openCommandPalette();
+          return;
+        case "toggle-sidebar":
+          toggleSidebar();
+          return;
+        case "back":
+          window.history.back();
+          return;
+        case "forward":
+          window.history.forward();
+          return;
+        case "previous-thread":
+          stepThread(-1);
+          return;
+        case "next-thread":
+          stepThread(1);
+          return;
+        case "open-attention":
+          openAttention();
+          return;
+        case "insert-text":
+          if (!text) {
+            toastManager.add({
+              type: "info",
+              title: "This key has no text yet. Set it in Settings.",
+            });
+            return;
+          }
+          runBusAction({ type: "insert-text", text });
+          return;
+        default:
+          runBusAction({ type: action });
+      }
+    },
+    [openAttention, stepThread, toggleSidebar],
   );
 
   const runGesture = useCallback(
@@ -452,49 +563,27 @@ function CodexMicroDriver({ hid }: { readonly hid: Hid }) {
           return;
         }
         case "action-key":
-          runPadAction(context.keyActions[gesture.key]);
+          // One wide keycap presses both switches; only a split slot has two keys.
+          if (gesture.key === "ACT11" && !context.splitWideKey) return;
+          runKeyAction(context.keyActions[gesture.key], context.keyTexts[gesture.key]);
           return;
-        case "dial-turn": {
-          const count = context.ranked.length;
-          if (count === 0) return;
-          const index = context.ranked.findIndex(
-            (thread) => agentKeyThreadKey(thread) === context.openThreadKey,
-          );
-          const next =
-            index === -1
-              ? gesture.step > 0
-                ? 0
-                : count - 1
-              : (index + gesture.step + count) % count;
-          const thread = context.ranked[next];
-          if (thread !== undefined) openThread(thread);
+        case "dial-turn":
+          if (context.dialMode === "scroll") runBusAction({ type: "scroll", step: gesture.step });
+          else stepThread(gesture.step);
           return;
-        }
-        case "dial-press": {
-          for (const wanted of ATTENTION_ORDER) {
-            const thread = context.ranked.find(
-              (candidate) => context.stateOf(agentKeyThreadKey(candidate)) === wanted,
-            );
-            if (thread !== undefined) {
-              openThread(thread);
-              return;
-            }
-          }
-          toastManager.add({ type: "info", title: "Nothing needs you right now." });
+        case "dial-press":
+          if (context.dialMode === "scroll") runBusAction({ type: "scroll-latest" });
+          else openAttention();
           return;
-        }
         case "dial-hold":
           void navigate({ to: CODEX_MICRO_SETTINGS_PATH });
           return;
         case "joystick":
-          if (gesture.direction === "up") openCommandPalette();
-          else if (gesture.direction === "down") toggleSidebar();
-          else if (gesture.direction === "left") window.history.back();
-          else window.history.forward();
+          runKeyAction(context.stickActions[gesture.direction], undefined);
           return;
       }
     },
-    [navigate, openThread, toggleSidebar],
+    [navigate, openAttention, openThread, runKeyAction, stepThread],
   );
 
   const handleEvent = useCallback(

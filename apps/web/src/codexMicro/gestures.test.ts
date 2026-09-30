@@ -35,10 +35,10 @@ describe("PadGestureReader", () => {
     expect(reader.read(down("AG01"), 600)).toMatchObject({ doubleTap: false });
   });
 
-  it("reports the wide key once, though both of its switches fire", () => {
+  it("reports both switches under the wide slot", () => {
     const reader = new PadGestureReader();
     expect(reader.read(down("ACT10"), 0)).toEqual({ kind: "action-key", key: "ACT10" });
-    expect(reader.read(down("ACT11"), 0)).toBeNull();
+    expect(reader.read(down("ACT11"), 0)).toEqual({ kind: "action-key", key: "ACT11" });
   });
 
   it("tells a dial press from a hold on release", () => {

@@ -1,11 +1,17 @@
-import type { CodexMicroKeyAction } from "@t3tools/contracts";
-
 /**
  * Typed window-event bus from the Codex Micro to the views that own each
  * action: ChatView answers for the open thread, the chat route starts new
  * threads. Dispatch is synchronous, so the pad learns whether anyone acted.
  */
-export type PadAction = Exclude<CodexMicroKeyAction, "none">;
+export type PadAction =
+  | {
+      readonly type: "approve" | "decline" | "send" | "stop" | "fast-mode" | "new-thread";
+    }
+  /** Add text to the composer without sending it. */
+  | { readonly type: "insert-text"; readonly text: string }
+  /** One dial detent through the open conversation: 1 down, -1 up. */
+  | { readonly type: "scroll"; readonly step: 1 | -1 }
+  | { readonly type: "scroll-latest" };
 
 /** What happened, so the pad can say why a press did nothing. */
 export type PadActionOutcome = "done" | "fast-mode-on" | "fast-mode-off" | "unavailable";
