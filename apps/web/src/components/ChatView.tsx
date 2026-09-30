@@ -200,6 +200,11 @@ import { addBrowserSurface } from "./preview/addBrowserSurface";
 import { closePreviewSession } from "./preview/closePreviewSession";
 import { ThreadPreviewMiniPlayer } from "./preview/ThreadPreviewMiniPlayer";
 import { subscribePreviewAction } from "./preview/previewActionBus";
+import {
+  subscribePadActions,
+  type PadAction,
+  type PadActionOutcome,
+} from "../codexMicro/padActionBus";
 import { getConfiguredPreviewUrls } from "./preview/previewEmptyStateLogic";
 import { makeWorkspaceFileDropHandlers } from "./chat/workspaceFileDrop";
 import {
@@ -1473,6 +1478,9 @@ function releaseChatTimelineAnchor<T extends { readonly messageId: MessageId | n
 ): T {
   return current.messageId === null ? current : { ...current, messageId: null };
 }
+
+/** How far one Codex Micro dial detent scrolls the conversation. */
+const PAD_SCROLL_STEP_PX = 120;
 
 export default function ChatView(props: ChatViewProps) {
   const {
@@ -8642,6 +8650,67 @@ export default function ChatView(props: ChatViewProps) {
     },
     [activeThreadId, environmentId, respondToThreadApproval, setThreadError],
   );
+
+  // Codex Micro keys act on the open thread exactly as the matching controls do.
+  const padActionHandlerRef = useRef<(action: PadAction) => PadActionOutcome | null>(() => null);
+  padActionHandlerRef.current = (action) => {
+    switch (action.type) {
+      case "approve":
+      case "decline": {
+        const decision = action.type === "approve" ? "accept" : "decline";
+        const approval = activePendingApproval;
+        if (
+          approval === null ||
+          respondingRequestIds.includes(approval.requestId) ||
+          (approval.options !== undefined &&
+            !approval.options.some((option) => option.decision === decision))
+        ) {
+          return "unavailable";
+        }
+        void onRespondToApproval(approval.requestId, decision);
+        return "done";
+      }
+      case "send":
+        void onSend();
+        return "done";
+      case "stop":
+        if (!canInterruptRunningThread) return "unavailable";
+        void onInterrupt();
+        return "done";
+      case "fast-mode": {
+        const enabled = composerRef.current?.toggleFastMode() ?? null;
+        if (enabled === null) return "unavailable";
+        return enabled ? "fast-mode-on" : "fast-mode-off";
+      }
+      case "insert-text":
+        return composerRef.current?.insertTextAtEnd(action.text, { ensureLeadingBoundary: true })
+          ? "done"
+          : "unavailable";
+      case "scroll": {
+        const scrollNode = getTimelineScrollableNode();
+        if (scrollNode === null) return "unavailable";
+        // Scrolling up leaves the live edge the way a wheel does, so the
+        // timeline stops pinning itself to the newest message.
+        if (action.step < 0) {
+          timelineScrollIntentRef.current = "away-from-end";
+          cancelTimelineLiveFollowForUserNavigation();
+        } else {
+          timelineScrollIntentRef.current = "toward-end";
+        }
+        // Instant, like a wheel notch: smooth scrolls restart from wherever the
+        // last one was mid-flight, so a quick spin would barely move.
+        scrollNode.scrollBy({ top: action.step * PAD_SCROLL_STEP_PX });
+        return "done";
+      }
+      case "scroll-latest":
+        composerRef.current?.restoreAfterTimelineReachedEnd();
+        scrollToEnd(true);
+        return "done";
+      case "new-thread":
+        return null;
+    }
+  };
+  useEffect(() => subscribePadActions((action) => padActionHandlerRef.current(action)), []);
 
   const onRespondToUserInput = useCallback(
     async (requestId: ApprovalRequestId, answers: Record<string, unknown>) => {

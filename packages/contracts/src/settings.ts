@@ -295,6 +295,128 @@ export const DiffColorScheme = Schema.Literals(["red-green", "blue-orange"]);
 export const ChatWidth = Schema.Literals(["comfortable", "wide", "full"]);
 export type ChatWidth = typeof ChatWidth.Type;
 
+/**
+ * What a Codex Micro key or stick direction does in T3 Code. Keycaps are
+ * swappable, so any key takes any action. `insert-text` adds the key's text
+ * from `codexMicroKeyTexts` to the composer, so it only applies to keys.
+ */
+export const CODEX_MICRO_KEY_ACTIONS = [
+  "approve",
+  "decline",
+  "send",
+  "stop",
+  "fast-mode",
+  "new-thread",
+  "insert-text",
+  "previous-thread",
+  "next-thread",
+  "open-attention",
+  "command-palette",
+  "toggle-sidebar",
+  "back",
+  "forward",
+  "none",
+] as const;
+export const CodexMicroKeyAction = Schema.Literals(CODEX_MICRO_KEY_ACTIONS);
+export type CodexMicroKeyAction = typeof CodexMicroKeyAction.Type;
+
+/**
+ * The pad's action-key switch ids. ACT10 and ACT11 sit under the wide slot:
+ * one wide keycap presses both, so ACT11 only counts once the slot is split
+ * for two single keycaps (`codexMicroSplitWideKey`).
+ */
+export const CODEX_MICRO_ACTION_KEYS = [
+  "ACT06",
+  "ACT07",
+  "ACT08",
+  "ACT09",
+  "ACT10",
+  "ACT11",
+  "ACT12",
+] as const;
+export type CodexMicroActionKey = (typeof CODEX_MICRO_ACTION_KEYS)[number];
+
+/**
+ * Follows the factory keycaps (FAST, APPR, REJ, SPLIT, MIC, CODEX). T3 Code has
+ * no thread fork or voice input, so SPLIT starts a new thread and MIC is unset.
+ */
+export const DEFAULT_CODEX_MICRO_KEY_ACTIONS = {
+  ACT06: "fast-mode",
+  ACT07: "approve",
+  ACT08: "decline",
+  ACT09: "new-thread",
+  ACT10: "none",
+  ACT11: "none",
+  ACT12: "send",
+} as const satisfies Record<CodexMicroActionKey, CodexMicroKeyAction>;
+
+const codexMicroKeyActionField = (key: CodexMicroActionKey) =>
+  CodexMicroKeyAction.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_CODEX_MICRO_KEY_ACTIONS[key])),
+  );
+
+export const CodexMicroKeyActions = Schema.Struct({
+  ACT06: codexMicroKeyActionField("ACT06"),
+  ACT07: codexMicroKeyActionField("ACT07"),
+  ACT08: codexMicroKeyActionField("ACT08"),
+  ACT09: codexMicroKeyActionField("ACT09"),
+  ACT10: codexMicroKeyActionField("ACT10"),
+  ACT11: codexMicroKeyActionField("ACT11"),
+  ACT12: codexMicroKeyActionField("ACT12"),
+});
+export type CodexMicroKeyActions = typeof CodexMicroKeyActions.Type;
+
+export const CODEX_MICRO_STICK_DIRECTIONS = ["up", "down", "left", "right"] as const;
+export type CodexMicroStickDirection = (typeof CODEX_MICRO_STICK_DIRECTIONS)[number];
+
+export const DEFAULT_CODEX_MICRO_STICK_ACTIONS = {
+  up: "command-palette",
+  down: "toggle-sidebar",
+  left: "back",
+  right: "forward",
+} as const satisfies Record<CodexMicroStickDirection, CodexMicroKeyAction>;
+
+const codexMicroStickActionField = (direction: CodexMicroStickDirection) =>
+  CodexMicroKeyAction.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_CODEX_MICRO_STICK_ACTIONS[direction])),
+  );
+
+export const CodexMicroStickActions = Schema.Struct({
+  up: codexMicroStickActionField("up"),
+  down: codexMicroStickActionField("down"),
+  left: codexMicroStickActionField("left"),
+  right: codexMicroStickActionField("right"),
+});
+export type CodexMicroStickActions = typeof CodexMicroStickActions.Type;
+
+/** Text an `insert-text` key adds to the composer, by key id. */
+export const CodexMicroKeyTexts = Schema.Record(Schema.String, Schema.String);
+export type CodexMicroKeyTexts = typeof CodexMicroKeyTexts.Type;
+
+/** `threads` steps through threads; `scroll` scrolls the open conversation. */
+export const CodexMicroDialMode = Schema.Literals(["threads", "scroll"]);
+export type CodexMicroDialMode = typeof CodexMicroDialMode.Type;
+
+/**
+ * What the Agent Keys hold: the first six pinned and active threads (`inbox`),
+ * the first six pinned threads (`pinned`), or the threads chosen per key in
+ * `codexMicroAgentKeyThreads` (`custom`).
+ */
+export const CodexMicroAgentKeyMode = Schema.Literals(["inbox", "pinned", "custom"]);
+export type CodexMicroAgentKeyMode = typeof CodexMicroAgentKeyMode.Type;
+
+/** Scoped thread keys for AG00-AG05 in `custom` mode; null leaves a key dark. */
+export const CodexMicroAgentKeyThreads = Schema.Array(Schema.NullOr(Schema.String));
+export type CodexMicroAgentKeyThreads = typeof CodexMicroAgentKeyThreads.Type;
+
+/** Seconds without pad input or light changes before the pad goes dark. 0 never dims. */
+export const CodexMicroAutoDimSeconds = Schema.Literals([0, 30, 60, 180, 600, 1800, 3600]);
+export type CodexMicroAutoDimSeconds = typeof CodexMicroAutoDimSeconds.Type;
+
+export const CodexMicroBrightness = Schema.Int.check(
+  Schema.isBetween({ minimum: 10, maximum: 100 }),
+);
+
 export const ClientSettingsSchema = Schema.Struct({
   notificationMode: NotificationMode.pipe(
     Schema.withDecodingDefault(Effect.succeed("off" as const)),
@@ -492,6 +614,31 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   snapShotFlash: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   snapShotAnimations: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  // Off until asked: the ChatGPT app can drive the same pad, and two apps
+  // repainting one set of LEDs looks like a broken device.
+  codexMicroEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  // Factory defaults: full brightness, dark after three idle minutes.
+  codexMicroBrightness: CodexMicroBrightness.pipe(Schema.withDecodingDefault(Effect.succeed(100))),
+  codexMicroAutoDimSeconds: CodexMicroAutoDimSeconds.pipe(
+    Schema.withDecodingDefault(Effect.succeed(180 as const)),
+  ),
+  codexMicroKeyActions: CodexMicroKeyActions.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_CODEX_MICRO_KEY_ACTIONS)),
+  ),
+  codexMicroKeyTexts: CodexMicroKeyTexts.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  codexMicroSplitWideKey: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  codexMicroDialMode: CodexMicroDialMode.pipe(
+    Schema.withDecodingDefault(Effect.succeed("threads" as const)),
+  ),
+  codexMicroStickActions: CodexMicroStickActions.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_CODEX_MICRO_STICK_ACTIONS)),
+  ),
+  codexMicroAgentKeyMode: CodexMicroAgentKeyMode.pipe(
+    Schema.withDecodingDefault(Effect.succeed("inbox" as const)),
+  ),
+  codexMicroAgentKeyThreads: CodexMicroAgentKeyThreads.pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   wordWrap: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
 });
 export type ClientSettings = typeof ClientSettingsSchema.Type;
@@ -1678,6 +1825,16 @@ export const ClientSettingsPatch = Schema.Struct({
   snapShotSound: Schema.optionalKey(SnapShotSound),
   snapShotFlash: Schema.optionalKey(Schema.Boolean),
   snapShotAnimations: Schema.optionalKey(Schema.Boolean),
+  codexMicroEnabled: Schema.optionalKey(Schema.Boolean),
+  codexMicroBrightness: Schema.optionalKey(CodexMicroBrightness),
+  codexMicroAutoDimSeconds: Schema.optionalKey(CodexMicroAutoDimSeconds),
+  codexMicroKeyActions: Schema.optionalKey(CodexMicroKeyActions),
+  codexMicroKeyTexts: Schema.optionalKey(CodexMicroKeyTexts),
+  codexMicroSplitWideKey: Schema.optionalKey(Schema.Boolean),
+  codexMicroDialMode: Schema.optionalKey(CodexMicroDialMode),
+  codexMicroStickActions: Schema.optionalKey(CodexMicroStickActions),
+  codexMicroAgentKeyMode: Schema.optionalKey(CodexMicroAgentKeyMode),
+  codexMicroAgentKeyThreads: Schema.optionalKey(CodexMicroAgentKeyThreads),
   wordWrap: Schema.optionalKey(Schema.Boolean),
 });
 export type ClientSettingsPatch = typeof ClientSettingsPatch.Type;

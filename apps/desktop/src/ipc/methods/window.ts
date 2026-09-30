@@ -323,7 +323,10 @@ export const openSystemSettings = DesktopIpc.makeIpcMethod({
     const opened = yield* shell.openSystemSettings(pane);
     if (opened && environment.isPackaged) {
       const permissions = yield* MacPermissions.MacPermissions;
-      const isGranted = yield* safariPermissionCheck;
+      // Electron cannot read the Input Monitoring grant, and macOS offers to
+      // relaunch the app itself once it is switched on, so that helper simply
+      // follows the Settings window.
+      const isGranted = pane === "full-disk-access" ? yield* safariPermissionCheck : () => false;
       yield* permissions.showHelper(pane, owner, isGranted);
     }
     return opened;
@@ -370,6 +373,22 @@ export const pasteAsText = DesktopIpc.makeIpcMethod({
     ) {
       focused.paste();
     }
+  }),
+});
+
+/** Brings the calling window to the front, as a Codex Micro Agent Key double tap asks. */
+export const revealWindow = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.REVEAL_WINDOW_CHANNEL,
+  payload: Schema.Undefined,
+  result: Schema.Void,
+  handler: Effect.fn("desktop.ipc.window.revealWindow")(function* (_input, event) {
+    if (event === undefined) return;
+    const window = Electron.BrowserWindow.getAllWindows().find(
+      (candidate) => !candidate.isDestroyed() && candidate.webContents.id === event.sender.id,
+    );
+    if (window === undefined) return;
+    const electronWindow = yield* ElectronWindow.ElectronWindow;
+    yield* electronWindow.reveal(window);
   }),
 });
 
@@ -424,9 +443,10 @@ export const checkSystemPermission = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.CHECK_SYSTEM_PERMISSION_CHANNEL,
   payload: SystemSettingsPaneSchema,
   result: Schema.Boolean,
-  handler: Effect.fn("desktop.ipc.window.checkSystemPermission")(function* () {
+  handler: Effect.fn("desktop.ipc.window.checkSystemPermission")(function* (pane) {
     const environment = yield* DesktopEnvironment.DesktopEnvironment;
-    if (environment.platform !== "darwin") return false;
+    // Only Full Disk Access has a probe; Input Monitoring is unreadable from Electron.
+    if (environment.platform !== "darwin" || pane !== "full-disk-access") return false;
     const check = yield* safariPermissionCheck;
     return yield* Effect.promise(check);
   }),

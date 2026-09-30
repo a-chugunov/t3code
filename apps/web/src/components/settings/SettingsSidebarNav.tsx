@@ -62,6 +62,12 @@ const SnapShotIcon = createLucideIcon("snap-shot", [
   ["circle", { cx: "12", cy: "12", r: "1.5", key: "lens" }],
 ]);
 
+const CodexMicroIcon = createLucideIcon("codex-micro", [
+  ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "4", key: "case" }],
+  ["circle", { cx: "8.5", cy: "8.5", r: "1.5", key: "dial" }],
+  ["path", { d: "M13 8.5h2.5M7.5 13h9M7.5 16.5h9", key: "keys" }],
+]);
+
 const T3ConnectSidebarSignIn = lazy(() =>
   import("../clerk/T3ConnectSidebarSignIn").then((module) => ({
     default: module.T3ConnectSidebarSignIn,
@@ -81,6 +87,7 @@ const SETTINGS_SECTION_ICONS: Readonly<
   "/settings/projects": PanelsTopLeftIcon,
   "/settings/keybindings": KeyboardIcon,
   "/settings/snap-shot": SnapShotIcon,
+  "/settings/codex-micro": CodexMicroIcon,
   "/settings/providers": BotIcon,
   "/settings/integrations": BlocksIcon,
   "/settings/source-control": GitBranchIcon,

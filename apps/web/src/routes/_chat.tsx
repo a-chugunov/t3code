@@ -1,6 +1,6 @@
 import { Outlet, createFileRoute, redirect, useParams } from "@tanstack/react-router";
 import { useAtomValue } from "@effect/atom-react";
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 
 import { isCommandPaletteOpen } from "../commandPaletteBus";
 import { ThreadRouteView } from "../components/ThreadRouteView";
@@ -14,6 +14,7 @@ import { buildSidebarProjectSnapshots } from "../sidebarProjectGrouping";
 import { dispatchPreviewAction } from "../components/preview/previewActionBus";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
+import { subscribePadActions } from "../codexMicro/padActionBus";
 import { isPreviewFocused } from "../lib/previewFocus";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { isEditableFocused } from "../lib/editableFocus";
@@ -60,6 +61,38 @@ function ChatRouteGlobalShortcuts() {
       ? selectActiveRightPanel(state.byThreadKey, routeThreadRef) === "preview"
       : false,
   );
+  // The default sidebar routes creation through the command palette whenever
+  // there is a real choice to make; the legacy sidebar (and single-project
+  // setups) keep the immediate contextual create.
+  const startNewChat = useCallback(() => {
+    if (!legacySidebarEnabled && projectGroupCount > 1) {
+      openCommandPalette({ open: "new-thread-in" });
+      return;
+    }
+    void startNewThreadFromContext({
+      activeDraftThread,
+      activeThread: activeThread ?? undefined,
+      defaultProjectRef,
+      handleNewThread,
+    });
+  }, [
+    activeDraftThread,
+    activeThread,
+    defaultProjectRef,
+    handleNewThread,
+    legacySidebarEnabled,
+    projectGroupCount,
+  ]);
+  useEffect(
+    () =>
+      subscribePadActions((action) => {
+        if (action.type !== "new-thread") return null;
+        startNewChat();
+        return "done";
+      }),
+    [startNewChat],
+  );
+
   useEffect(() => {
     const onWindowKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
@@ -108,19 +141,7 @@ function ChatRouteGlobalShortcuts() {
       if (command === "chat.new") {
         event.preventDefault();
         event.stopPropagation();
-        // The default sidebar routes creation through the command palette
-        // whenever there is a real choice to make; the legacy sidebar (and
-        // single-project setups) keep the immediate contextual create.
-        if (!legacySidebarEnabled && projectGroupCount > 1) {
-          openCommandPalette({ open: "new-thread-in" });
-          return;
-        }
-        void startNewThreadFromContext({
-          activeDraftThread,
-          activeThread: activeThread ?? undefined,
-          defaultProjectRef,
-          handleNewThread,
-        });
+        startNewChat();
         return;
       }
 
@@ -180,10 +201,9 @@ function ChatRouteGlobalShortcuts() {
     keybindings,
     defaultProjectRef,
     previewOpen,
-    projectGroupCount,
     routeThreadRef,
     selectedThreadKeysSize,
-    legacySidebarEnabled,
+    startNewChat,
     terminalOpen,
   ]);
 
